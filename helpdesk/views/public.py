@@ -9,12 +9,12 @@ views/public.py - All public facing views, eg non-staff (no authentication
 
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, Http404, HttpResponse
-from django.shortcuts import render_to_response, get_object_or_404
+from django.shortcuts import render_to_response, get_object_or_404,render
 from django.template import loader, Context, RequestContext
 from django.utils.translation import ugettext as _
 
 from helpdesk import settings as helpdesk_settings
-from helpdesk.forms import PublicTicketForm
+from helpdesk.forms import PublicTicketForm,ShortTicketForm
 from helpdesk.lib import send_templated_mail, text_is_spam
 from helpdesk.models import Ticket, Queue, UserSettings, KBCategory
 
@@ -33,8 +33,8 @@ def homepage(request):
             return HttpResponseRedirect(reverse('helpdesk_dashboard'))
 
     if request.method == 'POST':
-        form = PublicTicketForm(request.POST, request.FILES)
-        form.fields['queue'].choices = [('', '--------')] + [[q.id, q.title] for q in Queue.objects.filter(allow_public_submission=True)]
+        form = ShortTicketForm(request.POST, request.FILES)
+        #form.fields['queue'].choices = [('', '--------')] + [[q.id, q.title] for q in Queue.objects.filter(allow_public_submission=True)]
         if form.is_valid():
             if text_is_spam(form.cleaned_data['body'], request):
                 # This submission is spam. Let's not save it.
@@ -58,8 +58,8 @@ def homepage(request):
         if request.user.is_authenticated() and request.user.email:
             initial_data['submitter_email'] = request.user.email
 
-        form = PublicTicketForm(initial=initial_data)
-        form.fields['queue'].choices = [('', '--------')] + [[q.id, q.title] for q in Queue.objects.filter(allow_public_submission=True)]
+        form = ShortTicketForm()
+        #form.fields['queue'].choices = [('', '--------')] + [[q.id, q.title] for q in Queue.objects.filter(allow_public_submission=True)]
 
     knowledgebase_categories = KBCategory.objects.all()
 
@@ -139,3 +139,20 @@ def change_language(request):
 
     return render_to_response('helpdesk/public_change_language.html',
         RequestContext(request, {'next': return_to}))
+
+def popup_ticket(request):
+    if request.method == 'POST':
+        form = ShortTicketForm(request.POST, request.FILES)
+        #form.fields['queue'].choices = [('', '--------')] + [[q.id, q.title] for q in Queue.objects.filter(allow_public_submission=True)]
+        if form.is_valid():
+            if text_is_spam(form.cleaned_data['body'], request):
+                # This submission is spam. Let's not save it.
+                return render_to_response('helpdesk/public_spam.html', RequestContext(request, {}))
+            else:
+                ticket = form.save()
+                return HttpResponse('<script type="text/javascript">window.close(); window.parent.location.href = "/";</script>')
+    else:
+        form = ShortTicketForm()
+    html = render(request,"helpdesk/popup_ticket_form.html",{'form':form})
+    return HttpResponse(html)        
+          

@@ -1,12 +1,19 @@
-{% load i18n %}{% load url from future %}
+{% load i18n %}{% load url from future %}{% load staticfiles %}
 {% load load_helpdesk_settings %}
 {% with request|load_helpdesk_settings as helpdesk_settings %}
+
+
+
+
 <html>
 <head>
 <title>{% block helpdesk_title %}{% trans "Helpdesk" %}{% endblock %}</title>
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.1/jquery-ui.min.js"></script>
 <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.2/js/bootstrap.min.js"></script>
+<script language="javascript" type="text/javascript" src="{% static 'ajax_form.js' %}"></script>
 <link href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.1/themes/smoothness/jquery-ui.css">
 <link rel='stylesheet' href='{{ STATIC_URL }}helpdesk/helpdesk-extend.css' type='text/css' />
 {% block helpdesk_head %}{% endblock %}
 </head>
@@ -18,7 +25,15 @@
         <h1>{% trans "Helpdesk" %}</h1>
         {% include "helpdesk/navigation.html" %}
     </div>
+    <!--<a href="{% url 'popup_ticket_form' %}" onclick="return popitup('{% url 'popup_ticket_form' %}')">Добавить тикет</a>-->
+        <!-- Modal --> <div class="modal fade" id="modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true"> 
+                       </div>
+        <!-- /.modal -->
+        <a class="fa fa-pencil" data-toggle="modal" href="{% url 'popup_ticket_form' %}" data-target="#modal" title="edit item" data-tooltip>
+        Ticket</a> 
+    <div id="dialog-form"></div>
     <div id='body' class="row">
+    
 {% block helpdesk_body %}{% endblock %}
     </div>
     <div id='footer' class="row">

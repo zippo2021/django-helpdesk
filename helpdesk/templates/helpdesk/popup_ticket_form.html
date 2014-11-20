@@ -1,0 +1,44 @@
+{% load i18n bootstrap %}
+<div class="modal-dialog modal-lg">
+<div class="modal-content"> 
+<div class="modal-header"> 
+<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button> 
+</div>
+<div class="modal-body"> {% blocktrans %}<h2>Submit a Ticket</h2>
+
+<p>Unless otherwise stated, all fields are required. Please provide as descriptive a title and description as possible.</p>{% endblocktrans %}
+<form id="popup_ticket" method='post' class="form" action="{% url 'popup_ticket_form' %}" enctype='multipart/form-data'>
+<fieldset>
+    {{ form|bootstrap }}
+        {% comment %}{% for field in form %}
+            
+            {% if field.is_hidden %}
+                {{ field }}
+            {% else %}
+                <dt><label for='id_{{ field.name }}'>{% trans field.label %}</label>{% if not field.field.required %} <span class='form_optional'>{% trans "(Optional)" %}</span>{% endif %}</dt>
+                <dd>{{ field }}</dd>
+                {% if field.errors %}<dd class='error'>{{ field.errors }}</dd>{% endif %}
+                {% if field.help_text %}<dd class='form_help_text'>{% trans field.help_text %}</dd>{% endif %}
+            {% endif %}
+
+        {% endfor %}
+        {% endcomment %}
+    
+    <div class="modal-footer">
+    <input type="submit" class="btn btn-primary" value="Cохранить" class="clearfix">
+    <input type="reset" class="btn btn-primary" value="Отменить изменения" class="clearfix">
+    </div>
+</fieldset>
+
+{% csrf_token %}</form>
+<script> 
+jQuery('.modal-content .calendar').datepicker({ dateFormat: "yy-mm-dd" }); 
+var form_options = { 
+        target: '#modal',
+        success: function() { } 
+    } 
+$('#popup_ticket').ajaxForm(form_options); 
+</script> 
+</div>
+</div>
+</div>

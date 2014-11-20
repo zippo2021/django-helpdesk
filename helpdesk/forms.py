@@ -71,10 +71,125 @@ class CustomFieldMixin(object):
 
         self.fields['custom_%s' % field.name] = fieldclass(**instanceargs)
 
+
+
+class ShortTicketForm(forms.Form):
+    title = forms.CharField(
+        max_length=100,
+        required=True,
+        widget=forms.TextInput(attrs={'size':'60'}),
+        label=_('Summary of the problem'),
+        )
+
+    submitter_email = forms.EmailField(
+        required=False,
+        label=_('Submitter E-Mail Address'),
+        widget=forms.TextInput(attrs={'size':'60'}),
+        help_text=_('This e-mail address will receive copies of all public '
+            'updates to this ticket.'),
+        )
+
+    body = forms.CharField(
+        widget=forms.Textarea(attrs={'cols': 47, 'rows': 15}),
+        label=_('Description of Issue'),
+        required=True,
+        )
+    '''def __init__(self, *args, **kwargs):
+        """
+        Add any custom fields that are defined to the form
+        """
+        super(TicketForm, self).__init__(*args, **kwargs)
+        for field in CustomField.objects.all():
+            instanceargs = {
+                    'label': field.label,
+                    'help_text': field.help_text,
+                    'required': field.required,
+                    }
+
+            self.customfield_to_field(field, instanceargs)
+    '''
+    def save(self):
+        """
+        Writes and returns a Ticket() object
+        """
+
+        q = Queue.objects.get(title = 'public')
+
+        t = Ticket(
+            title = self.cleaned_data['title'],
+            submitter_email = self.cleaned_data['submitter_email'],
+            created = timezone.now(),
+            status = Ticket.OPEN_STATUS,
+            queue = q,
+            description = self.cleaned_data['body'],
+            priority = 3,
+            due_date = None,
+            )
+
+        t.save()
+
+        for field, value in self.cleaned_data.items():
+            if field.startswith('custom_'):
+                field_name = field.replace('custom_', '')
+                customfield = CustomField.objects.get(name=field_name)
+                cfv = TicketCustomFieldValue(ticket=t,
+                            field=customfield,
+                            value=value)
+                cfv.save()
+
+        f = FollowUp(
+            ticket = t,
+            title = _('Ticket Opened Via Web'),
+            date = timezone.now(),
+            public = True,
+            comment = self.cleaned_data['body'],
+            )
+
+        f.save()
+        files = []
+
+        context = safe_template_context(t)
+
+        messages_sent_to = []
+
+        send_templated_mail(
+            'newticket_submitter',
+            context,
+            recipients=t.submitter_email,
+            sender=q.from_address,
+            fail_silently=True,
+            files=files,
+            )
+        messages_sent_to.append(t.submitter_email)
+
+        if q.new_ticket_cc and q.new_ticket_cc not in messages_sent_to:
+            send_templated_mail(
+                'newticket_cc',
+                context,
+                recipients=q.new_ticket_cc,
+                sender=q.from_address,
+                fail_silently=True,
+                files=files,
+                )
+            messages_sent_to.append(q.new_ticket_cc)
+
+        if q.updated_ticket_cc and q.updated_ticket_cc != q.new_ticket_cc and q.updated_ticket_cc not in messages_sent_to:
+            send_templated_mail(
+                'newticket_cc',
+                context,
+                recipients=q.updated_ticket_cc,
+                sender=q.from_address,
+                fail_silently=True,
+                files=files,
+                )
+
+        return t
+    
+
 class EditTicketForm(CustomFieldMixin, forms.ModelForm):
     class Meta:
         model = Ticket
-        exclude = ('created', 'modified', 'status', 'on_hold', 'resolution', 'last_escalation', 'assigned_to')
+        exclude = ('created','queue', 'modified', 'status', 'on_hold', 'resolution', 'last_escalation', 'assigned_to')
     
     def __init__(self, *args, **kwargs):
         """
@@ -102,7 +217,7 @@ class EditTicketForm(CustomFieldMixin, forms.ModelForm):
         
         for field, value in self.cleaned_data.items():
             if field.startswith('custom_'):
-                field_name = field.replace('custom_', '', 1)
+                field_name = field.replace('custom_', '')
                 customfield = CustomField.objects.get(name=field_name)
                 try:
                     cfv = TicketCustomFieldValue.objects.get(ticket=self.instance, field=customfield)
@@ -207,7 +322,7 @@ class TicketForm(CustomFieldMixin, forms.Form):
         Writes and returns a Ticket() object
         """
 
-        q = Queue.objects.get(id=int(self.cleaned_data['queue']))
+        q = Queue.objects.get(title = 'registered')
 
         t = Ticket( title = self.cleaned_data['title'],
                     submitter_email = self.cleaned_data['submitter_email'],
@@ -215,8 +330,8 @@ class TicketForm(CustomFieldMixin, forms.Form):
                     status = Ticket.OPEN_STATUS,
                     queue = q,
                     description = self.cleaned_data['body'],
-                    priority = self.cleaned_data['priority'],
-                    due_date = self.cleaned_data['due_date'],
+                    priority = 3,
+                    due_date = None,
                   )
 
         if self.cleaned_data['assigned_to']:
@@ -229,7 +344,7 @@ class TicketForm(CustomFieldMixin, forms.Form):
         
         for field, value in self.cleaned_data.items():
             if field.startswith('custom_'):
-                field_name = field.replace('custom_', '', 1)
+                field_name = field.replace('custom_', '')
                 customfield = CustomField.objects.get(name=field_name)
                 cfv = TicketCustomFieldValue(ticket=t,
                             field=customfield,
@@ -268,7 +383,7 @@ class TicketForm(CustomFieldMixin, forms.Form):
                 # Only files smaller than 512kb (or as defined in 
                 # settings.MAX_EMAIL_ATTACHMENT_SIZE) are sent via email.
                 try:
-                    files.append([a.filename, a.file])
+                    files.append(a.file.path)
                 except NotImplementedError:
                     pass
 
@@ -390,7 +505,7 @@ class PublicTicketForm(CustomFieldMixin, forms.Form):
         Writes and returns a Ticket() object
         """
 
-        q = Queue.objects.get(id=int(self.cleaned_data['queue']))
+        q = Queue.objects.get(title = 'public')
 
         t = Ticket(
             title = self.cleaned_data['title'],
@@ -399,15 +514,15 @@ class PublicTicketForm(CustomFieldMixin, forms.Form):
             status = Ticket.OPEN_STATUS,
             queue = q,
             description = self.cleaned_data['body'],
-            priority = self.cleaned_data['priority'],
-            due_date = self.cleaned_data['due_date'],
+            priority = 3,
+            due_date = None,
             )
 
         t.save()
 
         for field, value in self.cleaned_data.items():
             if field.startswith('custom_'):
-                field_name = field.replace('custom_', '', 1)
+                field_name = field.replace('custom_', '')
                 customfield = CustomField.objects.get(name=field_name)
                 cfv = TicketCustomFieldValue(ticket=t,
                             field=customfield,
@@ -441,7 +556,7 @@ class PublicTicketForm(CustomFieldMixin, forms.Form):
             if file.size < getattr(settings, 'MAX_EMAIL_ATTACHMENT_SIZE', 512000):
                 # Only files smaller than 512kb (or as defined in 
                 # settings.MAX_EMAIL_ATTACHMENT_SIZE) are sent via email.
-                files.append([a.filename, a.file])
+                files.append(a.file.path)
 
         context = safe_template_context(t)
 
@@ -523,15 +638,14 @@ class UserSettingsForm(forms.Form):
 class EmailIgnoreForm(forms.ModelForm):
     class Meta:
         model = IgnoreEmail
-        exclude = []
 
 class TicketCCForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super(TicketCCForm, self).__init__(*args, **kwargs)
         if helpdesk_settings.HELPDESK_STAFF_ONLY_TICKET_CC:
-            users = User.objects.filter(is_active=True, is_staff=True).order_by(User.USERNAME_FIELD)
+            users = User.objects.filter(is_active=True, is_staff=True).order_by('username')
         else:
-            users = User.objects.filter(is_active=True).order_by(User.USERNAME_FIELD)
+            users = User.objects.filter(is_active=True).order_by('username')
         self.fields['user'].queryset = users 
     class Meta:
         model = TicketCC
